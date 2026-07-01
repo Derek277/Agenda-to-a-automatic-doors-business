@@ -95,8 +95,8 @@ public class PanelCitas extends JPanel {
         panelOrden.setOpaque(false);
         panelOrden.add(new JLabel("Ordenar:"));
         cmbOrden = new JComboBox<>(new String[]{
-                "Fecha (próximas primero)",
                 "Fecha (más antiguas primero)",
+                "Fecha (próximas primero)",
                 "Cliente A-Z",
                 "Cliente Z-A"
         });
@@ -432,8 +432,8 @@ public class PanelCitas extends JPanel {
 
         int orden = cmbOrden.getSelectedIndex();
 switch (orden) {
-    case 0 -> sql.append("ORDER BY c.fecha_hora DESC ");   // más recientes primero
-    case 1 -> sql.append("ORDER BY c.fecha_hora ASC ");    // más antiguas primero
+    case 0 -> sql.append("ORDER BY c.fecha_hora ASC ");   // más recientes primero
+    case 1 -> sql.append("ORDER BY c.fecha_hora DESC ");    // más antiguas primero
     case 2 -> sql.append("ORDER BY cl.nombre ASC, cl.apellidos ASC, c.fecha_hora ASC ");
     case 3 -> sql.append("ORDER BY cl.nombre DESC, cl.apellidos DESC, c.fecha_hora ASC ");
 }
