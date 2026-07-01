@@ -431,12 +431,12 @@ public class PanelCitas extends JPanel {
         }
 
         int orden = cmbOrden.getSelectedIndex();
-        switch (orden) {
-            case 0 -> sql.append("ORDER BY CASE WHEN c.fecha_hora >= NOW() THEN 0 ELSE 1 END, c.fecha_hora ASC ");
-            case 1 -> sql.append("ORDER BY c.fecha_hora ASC ");
-            case 2 -> sql.append("ORDER BY cl.nombre ASC, cl.apellidos ASC, c.fecha_hora ASC ");
-            case 3 -> sql.append("ORDER BY cl.nombre DESC, cl.apellidos DESC, c.fecha_hora ASC ");
-        }
+switch (orden) {
+    case 0 -> sql.append("ORDER BY c.fecha_hora DESC ");   // más recientes primero
+    case 1 -> sql.append("ORDER BY c.fecha_hora ASC ");    // más antiguas primero
+    case 2 -> sql.append("ORDER BY cl.nombre ASC, cl.apellidos ASC, c.fecha_hora ASC ");
+    case 3 -> sql.append("ORDER BY cl.nombre DESC, cl.apellidos DESC, c.fecha_hora ASC ");
+}
 
         sql.append("LIMIT ").append(TAMANO_PAGINA).append(" OFFSET ").append(paginaActual * TAMANO_PAGINA);
 
