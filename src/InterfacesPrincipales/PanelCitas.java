@@ -322,9 +322,9 @@ public class PanelCitas extends JPanel {
         // Clientes
         try (Connection conn = Conexion.get();
              Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery("SELECT id_cliente, nombre, apellidos FROM cliente ORDER BY nombre")) {
+             ResultSet rs = st.executeQuery("SELECT id_cliente, nombre FROM cliente ORDER BY nombre")) {
             while (rs.next()) {
-                cmbFiltroCliente.addItem(rs.getInt("id_cliente") + " - " + rs.getString("nombre") + " " + rs.getString("apellidos"));
+                cmbFiltroCliente.addItem(rs.getInt("id_cliente") + " - " + rs.getString("nombre"));
             }
         } catch (SQLException e) { e.printStackTrace(); }
 
@@ -390,8 +390,8 @@ public class PanelCitas extends JPanel {
         idsCitas.clear();
 
         StringBuilder sql = new StringBuilder(
-            "SELECT c.id_cita, c.fecha_hora, cl.nombre AS cliente, cl.apellidos AS apellidos, " +
-            "tm.nombre AS motor_nombre, p.color AS puerta_color, " +
+            "SELECT c.id_cita, c.fecha_hora, cl.nombre AS cliente, " +
+            "tp.nombre AS tipo_puerta, p.color AS puerta_color, " +
             "d.calle, d.numero, d.colonia, ts.nombre AS servicio, c.notas " +
             "FROM cita c " +
             "JOIN puerta p ON c.id_puerta = p.id_puerta " +
@@ -399,7 +399,7 @@ public class PanelCitas extends JPanel {
             "JOIN cliente cl ON d.id_cliente = cl.id_cliente " +
             "LEFT JOIN servicio_cita sc ON c.id_cita = sc.id_cita " +
             "LEFT JOIN tipo_servicio ts ON sc.id_tipo_servicio = ts.id_tipo_servicio " +
-            "LEFT JOIN tipo_motor tm ON p.id_tipo_motor = tm.id_tipo_motor " +
+            "LEFT JOIN tipo_puerta tp ON p.id_tipo_puerta = tp.id_tipo_puerta " +
             "WHERE 1=1 "
         );
         List<Object> parametros = new ArrayList<>();
@@ -432,10 +432,10 @@ public class PanelCitas extends JPanel {
 
         int orden = cmbOrden.getSelectedIndex();
 switch (orden) {
-    case 0 -> sql.append("ORDER BY c.fecha_hora ASC ");   // más recientes primero
-    case 1 -> sql.append("ORDER BY c.fecha_hora DESC ");    // más antiguas primero
-    case 2 -> sql.append("ORDER BY cl.nombre ASC, cl.apellidos ASC, c.fecha_hora ASC ");
-    case 3 -> sql.append("ORDER BY cl.nombre DESC, cl.apellidos DESC, c.fecha_hora ASC ");
+    case 0 -> sql.append("ORDER BY c.fecha_hora ASC ");   // más antiguas primero
+    case 1 -> sql.append("ORDER BY c.fecha_hora DESC ");    // más próximas primero
+    case 2 -> sql.append("ORDER BY cl.nombre ASC, c.fecha_hora ASC ");
+    case 3 -> sql.append("ORDER BY cl.nombre DESC, c.fecha_hora ASC ");
 }
 
         sql.append("LIMIT ").append(TAMANO_PAGINA).append(" OFFSET ").append(paginaActual * TAMANO_PAGINA);
@@ -451,11 +451,11 @@ switch (orden) {
                     Timestamp ts = rs.getTimestamp("fecha_hora");
                     String fecha = ts != null ?
                             ts.toLocalDateTime().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) : "—";
-                    String cliente = rs.getString("cliente") + " " + rs.getString("apellidos");
+                    String cliente = rs.getString("cliente");
 
-                    String motor = rs.getString("motor_nombre");
+                    String tipoPuerta = rs.getString("tipo_puerta");
                     String color = rs.getString("puerta_color");
-                    String puerta = (motor != null ? motor + ", " : "") + color;
+                    String puerta = (tipoPuerta != null ? tipoPuerta + ", " : "") + color;
 
                     String direccion = rs.getString("calle") + " " + rs.getString("numero") + ", " + rs.getString("colonia");
                     String servicio = rs.getString("servicio") != null ? rs.getString("servicio") : "—";
@@ -865,10 +865,9 @@ switch (orden) {
             cmbCliente.removeAllItems();
             try (Connection conn = Conexion.get();
                  Statement st = conn.createStatement();
-                 ResultSet rs = st.executeQuery("SELECT id_cliente, nombre, apellidos FROM cliente ORDER BY nombre")) {
+                 ResultSet rs = st.executeQuery("SELECT id_cliente, nombre FROM cliente ORDER BY nombre")) {
                 while (rs.next()) {
-                    cmbCliente.addItem(new ClienteItem(rs.getInt("id_cliente"),
-                            rs.getString("nombre") + " " + rs.getString("apellidos")));
+                    cmbCliente.addItem(new ClienteItem(rs.getInt("id_cliente"), rs.getString("nombre")));
                 }
             } catch (SQLException e) { e.printStackTrace(); }
             cmbCliente.setSelectedItem(null);

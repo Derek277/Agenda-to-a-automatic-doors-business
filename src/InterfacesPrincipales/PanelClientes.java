@@ -129,7 +129,7 @@ public class PanelClientes extends JPanel {
         toolBar.add(btnEliminar);
 
         // ── Tabla (sin ID, sin dirección) ──
-        modelo = new DefaultTableModel(new String[]{"Nombre", "Apellidos", "Alias", "Teléfono"}, 0) {
+        modelo = new DefaultTableModel(new String[]{"Nombre", "Alias", "Teléfono"}, 0) {
             @Override public boolean isCellEditable(int row, int col) { return false; }
         };
         tablaClientes = new JTable(modelo);
@@ -187,6 +187,29 @@ public class PanelClientes extends JPanel {
         });
     }
 
+    /**
+     * Permite navegar entre varios JTextField usando las flechas ↑/↓ del teclado,
+     * en el orden en que se pasan como argumento (para capturar datos más rápido
+     * sin usar el mouse ni Tab). No se usa en JTextArea porque ahí las flechas
+     * ya sirven para moverse entre líneas del texto.
+     */
+    private static void agregarNavegacionFlechas(JTextField... campos) {
+        for (int i = 0; i < campos.length; i++) {
+            final int idx = i;
+            campos[i].addKeyListener(new KeyAdapter() {
+                @Override public void keyPressed(KeyEvent e) {
+                    if (e.getKeyCode() == KeyEvent.VK_DOWN && idx < campos.length - 1) {
+                        campos[idx + 1].requestFocusInWindow();
+                        e.consume();
+                    } else if (e.getKeyCode() == KeyEvent.VK_UP && idx > 0) {
+                        campos[idx - 1].requestFocusInWindow();
+                        e.consume();
+                    }
+                }
+            });
+        }
+    }
+
     // ── Carga de datos ────────────────────────────────────────────────────────
 
     private void cargarTabla() {
@@ -194,7 +217,7 @@ public class PanelClientes extends JPanel {
         idsClientes.clear();
 
         StringBuilder sql = new StringBuilder(
-            "SELECT id_cliente, nombre, apellidos, alias_cliente, telefono_movil " +
+            "SELECT id_cliente, nombre, alias_cliente, telefono_movil " +
             "FROM cliente WHERE 1=1 "
         );
         List<Object> parametros = new ArrayList<>();
@@ -208,7 +231,6 @@ public class PanelClientes extends JPanel {
         }
 
         sql.append("ORDER BY nombre ").append(ordenAscendente ? "ASC" : "DESC")
-           .append(", apellidos ").append(ordenAscendente ? "ASC" : "DESC")
            .append(" LIMIT ").append(TAMANO_PAGINA)
            .append(" OFFSET ").append(paginaActual * TAMANO_PAGINA);
 
@@ -222,7 +244,6 @@ public class PanelClientes extends JPanel {
                 while (rs.next()) {
                     modelo.addRow(new Object[]{
                         rs.getString("nombre"),
-                        rs.getString("apellidos"),
                         rs.getString("alias_cliente") != null ? rs.getString("alias_cliente") : "—",
                         rs.getString("telefono_movil") != null ? rs.getString("telefono_movil") : "—"
                     });
@@ -382,7 +403,7 @@ public class PanelClientes extends JPanel {
         private final Integer idClienteEditar;
         private boolean guardadoExitoso = false;
 
-        private JTextField txtNombre, txtApellidos, txtTelefono, txtAlias;
+        private JTextField txtNombre, txtTelefono, txtAlias;
         private JTable tablaDirecciones;
         private DefaultTableModel modeloDirecciones;
         private List<Integer> idsDirecciones = new ArrayList<>();
@@ -420,18 +441,12 @@ public class PanelClientes extends JPanel {
 
             int y = 0;
             gbc.gridx = 0; gbc.gridy = y;
-            panelDatos.add(new JLabel("Nombre: *"), gbc);
-            txtNombre = new JTextField(15);
+            panelDatos.add(new JLabel("Nombre completo: *"), gbc);
+            txtNombre = new JTextField(32);
             Estilos.estilizarCampo(txtNombre);
-            gbc.gridx = 1;
+            gbc.gridx = 1; gbc.gridwidth = 3;
             panelDatos.add(txtNombre, gbc);
-
-            gbc.gridx = 2;
-            panelDatos.add(new JLabel("Apellidos: *"), gbc);
-            txtApellidos = new JTextField(15);
-            Estilos.estilizarCampo(txtApellidos);
-            gbc.gridx = 3;
-            panelDatos.add(txtApellidos, gbc);
+            gbc.gridwidth = 1;
 
             gbc.gridx = 0; gbc.gridy = ++y;
             panelDatos.add(new JLabel("Teléfono:"), gbc);
@@ -447,6 +462,9 @@ public class PanelClientes extends JPanel {
             gbc.gridx = 3;
             panelDatos.add(txtAlias, gbc);
 
+            // Navegación con flechas ↑/↓ entre los campos, en orden visual
+            agregarNavegacionFlechas(txtNombre, txtTelefono, txtAlias);
+
             panel.add(panelDatos, BorderLayout.NORTH);
 
             // ── Direcciones del cliente ──
@@ -461,6 +479,18 @@ public class PanelClientes extends JPanel {
             tablaDirecciones.setRowHeight(28);
             Estilos.estilizarTabla(tablaDirecciones);
             tablaDirecciones.getSelectionModel().addListSelectionListener(e -> actualizarBotonesDireccion());
+            // Doble clic sobre una dirección = mostrar su historial de citas/servicios
+            tablaDirecciones.addMouseListener(new MouseAdapter() {
+                @Override public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() == 2) {
+                        int row = tablaDirecciones.getSelectedRow();
+                        if (row != -1) {
+                            int idDireccion = idsDirecciones.get(row);
+                            new DialogoHistorialDireccion(DialogoCliente.this, idDireccion).setVisible(true);
+                        }
+                    }
+                }
+            });
 
             JScrollPane scrollDirecciones = Estilos.scrollParaTabla(tablaDirecciones);
             scrollDirecciones.setPreferredSize(new Dimension(0, 150));
@@ -517,14 +547,13 @@ public class PanelClientes extends JPanel {
         }
 
         private void cargarDatosCliente() {
-            String sql = "SELECT nombre, apellidos, telefono_movil, alias_cliente FROM cliente WHERE id_cliente = ?";
+            String sql = "SELECT nombre, telefono_movil, alias_cliente FROM cliente WHERE id_cliente = ?";
             try (Connection conn = Conexion.get();
                  PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setInt(1, idClienteEditar);
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
                     txtNombre.setText(rs.getString("nombre"));
-                    txtApellidos.setText(rs.getString("apellidos"));
                     txtTelefono.setText(rs.getString("telefono_movil"));
                     txtAlias.setText(rs.getString("alias_cliente"));
                 }
@@ -593,27 +622,37 @@ public class PanelClientes extends JPanel {
                 return;
             }
 
+            // Verificar si esta dirección (a través de sus puertas) tiene citas asociadas.
+            // Mientras existan, no se permite eliminar: hay que borrar esas citas primero.
+            try (Connection conn = Conexion.get();
+                 PreparedStatement ps = conn.prepareStatement(
+                     "SELECT 1 FROM cita c " +
+                     "JOIN puerta p ON c.id_puerta = p.id_puerta " +
+                     "WHERE p.id_direccion = ? LIMIT 1")) {
+                ps.setInt(1, idDireccion);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        JOptionPane.showMessageDialog(this,
+                                "Esta dirección está asociada a una o varias citas.\n" +
+                                "Elimine primero esas citas desde la pestaña Citas y luego podrá borrar la dirección.",
+                                "Dirección con citas asociadas", JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Error al verificar citas: " + e.getMessage());
+                return;
+            }
+
             int confirm = JOptionPane.showConfirmDialog(this,
-                    "¿Eliminar esta dirección?\nTambién se eliminarán las puertas y citas asociadas a ella.",
+                    "¿Eliminar esta dirección?\nTambién se eliminarán las puertas registradas en ella.",
                     "Confirmar", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
             if (confirm != JOptionPane.YES_OPTION) return;
 
             try (Connection conn = Conexion.get()) {
                 conn.setAutoCommit(false);
                 try {
-                    try (PreparedStatement ps = conn.prepareStatement(
-                            "DELETE FROM servicio_cita WHERE id_cita IN (" +
-                            "  SELECT c.id_cita FROM cita c " +
-                            "  JOIN puerta p ON c.id_puerta = p.id_puerta " +
-                            "  WHERE p.id_direccion = ?)")) {
-                        ps.setInt(1, idDireccion);
-                        ps.executeUpdate();
-                    }
-                    try (PreparedStatement ps = conn.prepareStatement(
-                            "DELETE FROM cita WHERE id_puerta IN (SELECT id_puerta FROM puerta WHERE id_direccion = ?)")) {
-                        ps.setInt(1, idDireccion);
-                        ps.executeUpdate();
-                    }
                     try (PreparedStatement ps = conn.prepareStatement(
                             "DELETE FROM puerta WHERE id_direccion = ?")) {
                         ps.setInt(1, idDireccion);
@@ -638,30 +677,27 @@ public class PanelClientes extends JPanel {
 
         private void guardar() {
             String nombre = txtNombre.getText().trim();
-            String apellidos = txtApellidos.getText().trim();
-            if (nombre.isEmpty() || apellidos.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Nombre y apellidos son obligatorios.");
+            if (nombre.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "El nombre completo es obligatorio.");
                 return;
             }
 
             try (Connection conn = Conexion.get()) {
                 if (idClienteEditar == null) {
-                    String sql = "INSERT INTO cliente (nombre, apellidos, telefono_movil, alias_cliente) VALUES (?, ?, ?, ?)";
+                    String sql = "INSERT INTO cliente (nombre, telefono_movil, alias_cliente) VALUES (?, ?, ?)";
                     try (PreparedStatement ps = conn.prepareStatement(sql)) {
                         ps.setString(1, nombre);
-                        ps.setString(2, apellidos);
-                        ps.setString(3, txtTelefono.getText().trim());
-                        ps.setString(4, txtAlias.getText().trim());
+                        ps.setString(2, txtTelefono.getText().trim());
+                        ps.setString(3, txtAlias.getText().trim());
                         ps.executeUpdate();
                     }
                 } else {
-                    String sql = "UPDATE cliente SET nombre=?, apellidos=?, telefono_movil=?, alias_cliente=? WHERE id_cliente=?";
+                    String sql = "UPDATE cliente SET nombre=?, telefono_movil=?, alias_cliente=? WHERE id_cliente=?";
                     try (PreparedStatement ps = conn.prepareStatement(sql)) {
                         ps.setString(1, nombre);
-                        ps.setString(2, apellidos);
-                        ps.setString(3, txtTelefono.getText().trim());
-                        ps.setString(4, txtAlias.getText().trim());
-                        ps.setInt(5, idClienteEditar);
+                        ps.setString(2, txtTelefono.getText().trim());
+                        ps.setString(3, txtAlias.getText().trim());
+                        ps.setInt(4, idClienteEditar);
                         ps.executeUpdate();
                     }
                 }
@@ -741,6 +777,10 @@ public class PanelClientes extends JPanel {
             gbc.gridx = 1;
             panel.add(scrollRef, gbc);
 
+            // Navegación con flechas ↑/↓ entre los campos de texto (no incluye el
+            // área de referencia, ya que ahí las flechas mueven el cursor entre líneas)
+            agregarNavegacionFlechas(txtCalle, txtNumero, txtColonia);
+
             JPanel botones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 8));
             botones.setBackground(Color.WHITE);
             JButton btnGuardar = new JButton("Guardar");
@@ -815,6 +855,104 @@ public class PanelClientes extends JPanel {
 
         public boolean isGuardadoExitoso() {
             return guardadoExitoso;
+        }
+    }
+
+    // ─── DIÁLOGO DE HISTORIAL DE UNA DIRECCIÓN (doble clic sobre una dirección) ─
+
+    private static class DialogoHistorialDireccion extends JDialog {
+
+        public DialogoHistorialDireccion(JDialog padre, int idDireccion) {
+            super(padre, "Historial de la dirección", ModalityType.APPLICATION_MODAL);
+            initUI(idDireccion);
+            setSize(760, 420);
+            setLocationRelativeTo(padre);
+            setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+            getContentPane().setBackground(Color.WHITE);
+        }
+
+        private void initUI(int idDireccion) {
+            JPanel panel = new JPanel(new BorderLayout(0, 10));
+            panel.setBorder(new EmptyBorder(15, 15, 15, 15));
+            panel.setBackground(Color.WHITE);
+
+            DefaultTableModel modeloHistorial = new DefaultTableModel(
+                    new String[]{"Puerta", "Servicio", "Notas", "Fecha y hora", "Estado"}, 0) {
+                @Override public boolean isCellEditable(int row, int col) { return false; }
+            };
+            JTable tablaHistorial = new JTable(modeloHistorial);
+            tablaHistorial.setRowHeight(28);
+            Estilos.estilizarTabla(tablaHistorial);
+            tablaHistorial.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+                @Override
+                public Component getTableCellRendererComponent(JTable table, Object value,
+                        boolean isSelected, boolean hasFocus, int row, int column) {
+                    JLabel label = (JLabel) super.getTableCellRendererComponent(
+                            table, value, isSelected, hasFocus, row, column);
+                    if (!isSelected) {
+                        label.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 248, 248));
+                        label.setForeground(Color.BLACK);
+                    } else {
+                        label.setBackground(Estilos.AMARILLO);
+                        label.setForeground(Color.BLACK);
+                    }
+                    label.setBorder(new EmptyBorder(0, 8, 0, 8));
+                    return label;
+                }
+            });
+
+            JScrollPane scroll = Estilos.scrollParaTabla(tablaHistorial);
+            panel.add(scroll, BorderLayout.CENTER);
+
+            JPanel botones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 8));
+            botones.setBackground(Color.WHITE);
+            JButton btnCerrar = new JButton("Cerrar");
+            Estilos.estilizarBoton(btnCerrar, Estilos.BOTON_SECUNDARIO, Color.WHITE);
+            btnCerrar.addActionListener(e -> dispose());
+            botones.add(btnCerrar);
+            panel.add(botones, BorderLayout.SOUTH);
+
+            getContentPane().add(panel);
+
+            // Futuras arriba, pasadas abajo (mismo criterio de orden que usa por
+            // default el panel de Citas: por fecha_hora ascendente dentro de cada grupo)
+            String sql =
+                    "SELECT c.fecha_hora, c.notas, tp.nombre AS tipo_puerta, pu.color, ts.nombre AS servicio " +
+                    "FROM cita c " +
+                    "JOIN puerta pu ON c.id_puerta = pu.id_puerta " +
+                    "LEFT JOIN tipo_puerta tp ON pu.id_tipo_puerta = tp.id_tipo_puerta " +
+                    "LEFT JOIN servicio_cita sc ON sc.id_cita = c.id_cita " +
+                    "LEFT JOIN tipo_servicio ts ON sc.id_tipo_servicio = ts.id_tipo_servicio " +
+                    "WHERE pu.id_direccion = ? " +
+                    "ORDER BY (c.fecha_hora < now()) ASC, c.fecha_hora ASC";
+
+            java.text.SimpleDateFormat formato = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
+
+            try (Connection conn = Conexion.get();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, idDireccion);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        String tipoPuerta = rs.getString("tipo_puerta") != null ? rs.getString("tipo_puerta") : "—";
+                        String color = rs.getString("color") != null ? rs.getString("color") : "—";
+                        String puertaTexto = tipoPuerta + ", " + color;
+                        String servicio = rs.getString("servicio") != null ? rs.getString("servicio") : "—";
+                        String notas = rs.getString("notas") != null ? rs.getString("notas") : "—";
+                        Timestamp fechaHora = rs.getTimestamp("fecha_hora");
+                        String fechaTexto = fechaHora != null ? formato.format(fechaHora) : "—";
+                        String estado = (fechaHora != null && fechaHora.before(new java.util.Date()))
+                                ? "Finalizado" : "Pendiente";
+
+                        modeloHistorial.addRow(new Object[]{puertaTexto, servicio, notas, fechaTexto, estado});
+                    }
+                    if (modeloHistorial.getRowCount() == 0) {
+                        modeloHistorial.addRow(new Object[]{"—", "—", "Esta dirección no tiene citas registradas.", "—", "—"});
+                    }
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Error al cargar el historial: " + e.getMessage());
+            }
         }
     }
 }

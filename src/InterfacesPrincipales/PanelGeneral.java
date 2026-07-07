@@ -33,9 +33,9 @@ public class PanelGeneral extends JFrame {
         header.setBackground(Color.BLACK);
         header.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
 
-        JLabel lblTitulo = new JLabel("INNOVATEC");
+        JLabel lblTitulo = new JLabel("INNOVATEC puertas automáticas");
         lblTitulo.setFont(new Font("SansSerif", Font.BOLD, 28));
-        lblTitulo.setForeground(Color.WHITE);
+        lblTitulo.setForeground(utilidad.Estilos.AMARILLO);
 
         lblRolUsuario = new JLabel();
         lblRolUsuario.setFont(new Font("SansSerif", Font.PLAIN, 14));

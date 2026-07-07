@@ -147,7 +147,7 @@ public class PanelPuertas extends JPanel {
 
         // Tabla
         modelo = new DefaultTableModel(
-                new String[]{"Motor", "Color", "Dirección", "Cliente"}, 0) {
+                new String[]{"Tipo de puerta", "Motor", "Color", "Dirección", "Cliente"}, 0) {
             @Override public boolean isCellEditable(int row, int col) { return false; }
         };
         tablaPuertas = new JTable(modelo);
@@ -158,6 +158,12 @@ public class PanelPuertas extends JPanel {
         Estilos.estilizarTabla(tablaPuertas);
         tablaPuertas.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) actualizarBotones();
+        });
+        // Doble clic = editar directamente
+        tablaPuertas.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) abrirDialogoPuerta(obtenerIdSeleccionado());
+            }
         });
 
         JScrollPane scrollTabla = Estilos.scrollParaTabla(tablaPuertas);
@@ -211,9 +217,9 @@ public class PanelPuertas extends JPanel {
         // Clientes
         try (Connection conn = Conexion.get();
              Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery("SELECT id_cliente, nombre, apellidos FROM cliente ORDER BY nombre")) {
+             ResultSet rs = st.executeQuery("SELECT id_cliente, nombre FROM cliente ORDER BY nombre")) {
             while (rs.next()) {
-                cmbFiltroCliente.addItem(rs.getInt("id_cliente") + " - " + rs.getString("nombre") + " " + rs.getString("apellidos"));
+                cmbFiltroCliente.addItem(rs.getInt("id_cliente") + " - " + rs.getString("nombre"));
             }
         } catch (SQLException e) { e.printStackTrace(); }
 
@@ -232,13 +238,14 @@ public class PanelPuertas extends JPanel {
         idsPuertas.clear();
 
         StringBuilder sql = new StringBuilder(
-            "SELECT p.id_puerta, tm.nombre AS motor, p.color, " +
+            "SELECT p.id_puerta, tm.nombre AS motor, tp.nombre AS tipo_puerta, p.color, " +
             "d.calle, d.numero, d.colonia, " +
-            "cl.nombre AS cliente, cl.apellidos " +
+            "cl.nombre AS cliente " +
             "FROM puerta p " +
             "JOIN direccion d ON p.id_direccion = d.id_direccion " +
             "JOIN cliente cl ON d.id_cliente = cl.id_cliente " +
             "LEFT JOIN tipo_motor tm ON p.id_tipo_motor = tm.id_tipo_motor " +
+            "LEFT JOIN tipo_puerta tp ON p.id_tipo_puerta = tp.id_tipo_puerta " +
             "WHERE 1=1 "
         );
         List<Object> parametros = new ArrayList<>();
@@ -256,7 +263,7 @@ public class PanelPuertas extends JPanel {
         String texto = txtBuscar.getText().trim();
         if (!texto.isEmpty()) {
             String patron = "%" + texto + "%";
-            sql.append("AND (p.color ILIKE ? OR d.calle ILIKE ? OR d.colonia ILIKE ? OR cl.nombre ILIKE ? OR cl.apellidos ILIKE ? OR tm.nombre ILIKE ?) ");
+            sql.append("AND (p.color ILIKE ? OR d.calle ILIKE ? OR d.colonia ILIKE ? OR cl.nombre ILIKE ? OR tm.nombre ILIKE ? OR tp.nombre ILIKE ?) ");
             parametros.add(patron);
             parametros.add(patron);
             parametros.add(patron);
@@ -267,8 +274,8 @@ public class PanelPuertas extends JPanel {
 
         int orden = cmbOrden.getSelectedIndex();
         switch (orden) {
-            case 0 -> sql.append("ORDER BY cl.nombre ASC, cl.apellidos ASC, p.color ASC ");
-            case 1 -> sql.append("ORDER BY cl.nombre DESC, cl.apellidos DESC, p.color ASC ");
+            case 0 -> sql.append("ORDER BY cl.nombre ASC, p.color ASC ");
+            case 1 -> sql.append("ORDER BY cl.nombre DESC, p.color ASC ");
             case 2 -> sql.append("ORDER BY p.color ASC, cl.nombre ASC ");
             case 3 -> sql.append("ORDER BY p.color DESC, cl.nombre ASC ");
         }
@@ -283,12 +290,13 @@ public class PanelPuertas extends JPanel {
             try (ResultSet rs = ps.executeQuery()) {
                 int count = 0;
                 while (rs.next()) {
+                    String tipoPuerta = rs.getString("tipo_puerta") != null ? rs.getString("tipo_puerta") : "—";
                     String motor = rs.getString("motor") != null ? rs.getString("motor") : "—";
                     String color = rs.getString("color");
                     String direccion = rs.getString("calle") + " " + rs.getString("numero") + ", " + rs.getString("colonia");
-                    String cliente = rs.getString("cliente") + " " + rs.getString("apellidos");
+                    String cliente = rs.getString("cliente");
 
-                    modelo.addRow(new Object[]{motor, color, direccion, cliente});
+                    modelo.addRow(new Object[]{tipoPuerta, motor, color, direccion, cliente});
                     idsPuertas.add(rs.getInt("id_puerta"));
                     count++;
                 }
@@ -444,6 +452,7 @@ public class PanelPuertas extends JPanel {
         private JComboBox<ClienteItem> cmbCliente;
         private JComboBox<DireccionItem> cmbDireccion;
         private JComboBox<MotorItem> cmbMotor;
+        private JComboBox<TipoPuertaItem> cmbTipoPuerta;
         private JComboBox<String> cmbColor;
         private JButton btnGuardar, btnCancelar;
 
@@ -462,6 +471,11 @@ public class PanelPuertas extends JPanel {
             MotorItem(int id, String texto) { this.id = id; this.texto = texto; }
             @Override public String toString() { return texto; }
         }
+        private static class TipoPuertaItem {
+            int id; String texto;
+            TipoPuertaItem(int id, String texto) { this.id = id; this.texto = texto; }
+            @Override public String toString() { return texto; }
+        }
 
         public DialogoPuerta(PanelPuertas padre, Integer idPuerta) {
             super(SwingUtilities.getWindowAncestor(padre),
@@ -470,6 +484,7 @@ public class PanelPuertas extends JPanel {
             initUI();
             cargarClientes();
             cargarMotores();
+            cargarTiposPuerta();
             if (idPuertaEditar != null) cargarDatos();
             else if (cmbCliente.getItemCount() > 0) cmbCliente.setSelectedIndex(0); // activa carga de direcciones
             setSize(550, 400);
@@ -522,6 +537,21 @@ public class PanelPuertas extends JPanel {
             gbc.gridwidth = 1;
 
             gbc.gridx = 0; gbc.gridy = ++y;
+            panel.add(new JLabel("Tipo de puerta:"), gbc);
+            cmbTipoPuerta = new JComboBox<>();
+            estilizarCombo(cmbTipoPuerta);
+            JButton btnAgregarTipoPuerta = new JButton("+");
+            btnAgregarTipoPuerta.setToolTipText("Agregar nuevo tipo de puerta");
+            btnAgregarTipoPuerta.addActionListener(e -> agregarNuevoTipoPuerta());
+            JPanel panelTipoPuerta = new JPanel(new BorderLayout());
+            panelTipoPuerta.setOpaque(false);
+            panelTipoPuerta.add(cmbTipoPuerta, BorderLayout.CENTER);
+            panelTipoPuerta.add(btnAgregarTipoPuerta, BorderLayout.EAST);
+            gbc.gridx = 1; gbc.gridwidth = 2;
+            panel.add(panelTipoPuerta, gbc);
+            gbc.gridwidth = 1;
+
+            gbc.gridx = 0; gbc.gridy = ++y;
             panel.add(new JLabel("Color: *"), gbc);
             cmbColor = new JComboBox<>(new String[]{"Blanco", "Negro", "Gris", "Madera", "Aluminio"});
             cmbColor.setEditable(true);
@@ -560,10 +590,9 @@ public class PanelPuertas extends JPanel {
             cmbCliente.removeAllItems();
             try (Connection conn = Conexion.get();
                  Statement st = conn.createStatement();
-                 ResultSet rs = st.executeQuery("SELECT id_cliente, nombre, apellidos FROM cliente ORDER BY nombre")) {
+                 ResultSet rs = st.executeQuery("SELECT id_cliente, nombre FROM cliente ORDER BY nombre")) {
                 while (rs.next()) {
-                    cmbCliente.addItem(new ClienteItem(rs.getInt("id_cliente"),
-                            rs.getString("nombre") + " " + rs.getString("apellidos")));
+                    cmbCliente.addItem(new ClienteItem(rs.getInt("id_cliente"), rs.getString("nombre")));
                 }
             } catch (SQLException e) { e.printStackTrace(); }
             if (cmbCliente.getItemCount() > 0) cmbCliente.setSelectedIndex(0);
@@ -581,6 +610,19 @@ public class PanelPuertas extends JPanel {
                 }
             } catch (SQLException e) { e.printStackTrace(); }
             cmbMotor.setSelectedIndex(0); // sin motor por defecto
+        }
+
+        private void cargarTiposPuerta() {
+            cmbTipoPuerta.removeAllItems();
+            cmbTipoPuerta.addItem(new TipoPuertaItem(-1, "-- Sin tipo de puerta --")); // opción nulo
+            try (Connection conn = Conexion.get();
+                 Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT id_tipo_puerta, nombre FROM tipo_puerta ORDER BY nombre")) {
+                while (rs.next()) {
+                    cmbTipoPuerta.addItem(new TipoPuertaItem(rs.getInt("id_tipo_puerta"), rs.getString("nombre")));
+                }
+            } catch (SQLException e) { e.printStackTrace(); }
+            cmbTipoPuerta.setSelectedIndex(0); // sin tipo de puerta por defecto
         }
 
         private void cargarDireccionesDelCliente() {
@@ -624,8 +666,25 @@ public class PanelPuertas extends JPanel {
             }
         }
 
+        private void agregarNuevoTipoPuerta() {
+            String nombre = JOptionPane.showInputDialog(this, "Nombre del nuevo tipo de puerta:");
+            if (nombre != null && !nombre.trim().isEmpty()) {
+                try (Connection conn = Conexion.get();
+                     PreparedStatement ps = conn.prepareStatement("INSERT INTO tipo_puerta (nombre) VALUES (?)", Statement.RETURN_GENERATED_KEYS)) {
+                    ps.setString(1, nombre.trim());
+                    ps.executeUpdate();
+                    ResultSet keys = ps.getGeneratedKeys();
+                    if (keys.next()) {
+                        int id = keys.getInt(1);
+                        cmbTipoPuerta.addItem(new TipoPuertaItem(id, nombre.trim()));
+                        cmbTipoPuerta.setSelectedIndex(cmbTipoPuerta.getItemCount() - 1);
+                    }
+                } catch (SQLException e) { e.printStackTrace(); }
+            }
+        }
+
         private void cargarDatos() {
-            String sql = "SELECT p.color, p.id_direccion, p.id_tipo_motor, d.id_cliente " +
+            String sql = "SELECT p.color, p.id_direccion, p.id_tipo_motor, p.id_tipo_puerta, d.id_cliente " +
                          "FROM puerta p " +
                          "JOIN direccion d ON p.id_direccion = d.id_direccion " +
                          "WHERE p.id_puerta = ?";
@@ -662,6 +721,18 @@ public class PanelPuertas extends JPanel {
                             }
                         }
                     }
+                    // Seleccionar tipo de puerta
+                    int idTipoPuerta = rs.getInt("id_tipo_puerta");
+                    if (rs.wasNull()) {
+                        cmbTipoPuerta.setSelectedIndex(0); // sin tipo de puerta
+                    } else {
+                        for (int i = 1; i < cmbTipoPuerta.getItemCount(); i++) {
+                            if (cmbTipoPuerta.getItemAt(i).id == idTipoPuerta) {
+                                cmbTipoPuerta.setSelectedIndex(i);
+                                break;
+                            }
+                        }
+                    }
                     cmbColor.setSelectedItem(rs.getString("color"));
                 }
             } catch (SQLException e) { e.printStackTrace(); }
@@ -687,24 +758,31 @@ public class PanelPuertas extends JPanel {
             MotorItem motor = (MotorItem) cmbMotor.getSelectedItem();
             Integer idMotor = (motor != null && motor.id != -1) ? motor.id : null;
 
+            TipoPuertaItem tipoPuerta = (TipoPuertaItem) cmbTipoPuerta.getSelectedItem();
+            Integer idTipoPuerta = (tipoPuerta != null && tipoPuerta.id != -1) ? tipoPuerta.id : null;
+
             try (Connection conn = Conexion.get()) {
                 if (idPuertaEditar == null) {
-                    String sql = "INSERT INTO puerta (color, id_direccion, id_tipo_motor) VALUES (?, ?, ?)";
+                    String sql = "INSERT INTO puerta (color, id_direccion, id_tipo_motor, id_tipo_puerta) VALUES (?, ?, ?, ?)";
                     try (PreparedStatement ps = conn.prepareStatement(sql)) {
                         ps.setString(1, color);
                         ps.setInt(2, direccion.idDireccion);
                         if (idMotor != null) ps.setInt(3, idMotor);
                         else ps.setNull(3, Types.INTEGER);
+                        if (idTipoPuerta != null) ps.setInt(4, idTipoPuerta);
+                        else ps.setNull(4, Types.INTEGER);
                         ps.executeUpdate();
                     }
                 } else {
-                    String sql = "UPDATE puerta SET color=?, id_direccion=?, id_tipo_motor=? WHERE id_puerta=?";
+                    String sql = "UPDATE puerta SET color=?, id_direccion=?, id_tipo_motor=?, id_tipo_puerta=? WHERE id_puerta=?";
                     try (PreparedStatement ps = conn.prepareStatement(sql)) {
                         ps.setString(1, color);
                         ps.setInt(2, direccion.idDireccion);
                         if (idMotor != null) ps.setInt(3, idMotor);
                         else ps.setNull(3, Types.INTEGER);
-                        ps.setInt(4, idPuertaEditar);
+                        if (idTipoPuerta != null) ps.setInt(4, idTipoPuerta);
+                        else ps.setNull(4, Types.INTEGER);
+                        ps.setInt(5, idPuertaEditar);
                         ps.executeUpdate();
                     }
                 }

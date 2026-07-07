@@ -181,9 +181,9 @@ public class PanelPolizas extends JPanel {
     private void cargarCombosFiltro() {
         try (Connection conn = Conexion.get();
              Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery("SELECT id_cliente, nombre, apellidos FROM cliente ORDER BY nombre")) {
+             ResultSet rs = st.executeQuery("SELECT id_cliente, nombre FROM cliente ORDER BY nombre")) {
             while (rs.next()) {
-                cmbFiltroCliente.addItem(rs.getInt("id_cliente") + " - " + rs.getString("nombre") + " " + rs.getString("apellidos"));
+                cmbFiltroCliente.addItem(rs.getInt("id_cliente") + " - " + rs.getString("nombre"));
             }
         } catch (SQLException e) { e.printStackTrace(); }
     }
@@ -196,7 +196,7 @@ public class PanelPolizas extends JPanel {
         StringBuilder sql = new StringBuilder();
         sql.append("SELECT * FROM (");
         sql.append("SELECT p.id_poliza_6m AS id, '6m' AS origen, ");
-        sql.append("cl.nombre || ' ' || cl.apellidos AS cliente, ");
+        sql.append("cl.nombre AS cliente, ");
         sql.append("tm.nombre AS motor, pu.color AS puerta_color, ");
         sql.append("'6 meses' AS tipo, ");
         sql.append("CASE WHEN MAX(c.fecha_hora) >= NOW() THEN 'Activa' ELSE 'Terminada' END AS estado, ");
@@ -207,10 +207,10 @@ public class PanelPolizas extends JPanel {
         sql.append("JOIN direccion d ON pu.id_direccion = d.id_direccion ");
         sql.append("JOIN cliente cl ON d.id_cliente = cl.id_cliente ");
         sql.append("LEFT JOIN tipo_motor tm ON pu.id_tipo_motor = tm.id_tipo_motor ");
-        sql.append("GROUP BY p.id_poliza_6m, cl.nombre, cl.apellidos, tm.nombre, pu.color ");
+        sql.append("GROUP BY p.id_poliza_6m, cl.nombre, tm.nombre, pu.color ");
         sql.append("UNION ALL ");
         sql.append("SELECT p.id_poliza_3m AS id, '3m' AS origen, ");
-        sql.append("cl.nombre || ' ' || cl.apellidos AS cliente, ");
+        sql.append("cl.nombre AS cliente, ");
         sql.append("tm.nombre AS motor, pu.color AS puerta_color, ");
         sql.append("'3 meses' AS tipo, ");
         sql.append("CASE WHEN MAX(c.fecha_hora) >= NOW() THEN 'Activa' ELSE 'Terminada' END AS estado, ");
@@ -221,14 +221,14 @@ public class PanelPolizas extends JPanel {
         sql.append("JOIN direccion d ON pu.id_direccion = d.id_direccion ");
         sql.append("JOIN cliente cl ON d.id_cliente = cl.id_cliente ");
         sql.append("LEFT JOIN tipo_motor tm ON pu.id_tipo_motor = tm.id_tipo_motor ");
-        sql.append("GROUP BY p.id_poliza_3m, cl.nombre, cl.apellidos, tm.nombre, pu.color ");
+        sql.append("GROUP BY p.id_poliza_3m, cl.nombre, tm.nombre, pu.color ");
         sql.append(") sub WHERE 1=1 ");
 
         List<Object> parametros = new ArrayList<>();
 
         if (cmbFiltroCliente.getSelectedIndex() > 0) {
             int idCliente = extraerId(cmbFiltroCliente.getSelectedItem().toString());
-            sql.append("AND sub.cliente IN (SELECT nombre || ' ' || apellidos FROM cliente WHERE id_cliente = ?) ");
+            sql.append("AND sub.cliente IN (SELECT nombre FROM cliente WHERE id_cliente = ?) ");
             parametros.add(idCliente);
         }
 
@@ -960,10 +960,9 @@ public class PanelPolizas extends JPanel {
             cmbCliente.removeAllItems();
             try (Connection conn = Conexion.get();
                  Statement st = conn.createStatement();
-                 ResultSet rs = st.executeQuery("SELECT id_cliente, nombre, apellidos FROM cliente ORDER BY nombre")) {
+                 ResultSet rs = st.executeQuery("SELECT id_cliente, nombre FROM cliente ORDER BY nombre")) {
                 while (rs.next()) {
-                    cmbCliente.addItem(new ClienteItem(rs.getInt("id_cliente"),
-                            rs.getString("nombre") + " " + rs.getString("apellidos")));
+                    cmbCliente.addItem(new ClienteItem(rs.getInt("id_cliente"), rs.getString("nombre")));
                 }
             } catch (SQLException e) { e.printStackTrace(); }
             cmbCliente.setSelectedItem(null);
@@ -1030,14 +1029,46 @@ public class PanelPolizas extends JPanel {
 
         private void cargarServicios() {
             cmbServicio.removeAllItems();
-            try (Connection conn = Conexion.get();
-                 Statement st = conn.createStatement();
-                 ResultSet rs = st.executeQuery("SELECT id_tipo_servicio, nombre FROM tipo_servicio ORDER BY nombre")) {
-                while (rs.next()) {
-                    cmbServicio.addItem(new ServicioItem(rs.getInt("id_tipo_servicio"), rs.getString("nombre")));
+            Integer idMantenimiento = null;
+            try (Connection conn = Conexion.get()) {
+                // Aseguramos que exista un servicio "Mantenimiento": lo buscamos y,
+                // si no existe todavía en esta base de datos, lo creamos al vuelo.
+                idMantenimiento = obtenerOCrearIdServicioMantenimiento(conn);
+                try (Statement st = conn.createStatement();
+                     ResultSet rs = st.executeQuery("SELECT id_tipo_servicio, nombre FROM tipo_servicio ORDER BY nombre")) {
+                    while (rs.next()) {
+                        cmbServicio.addItem(new ServicioItem(rs.getInt("id_tipo_servicio"), rs.getString("nombre")));
+                    }
                 }
             } catch (SQLException e) { e.printStackTrace(); }
+
+            // Servicio "Mantenimiento" seleccionado por defecto
+            if (idMantenimiento != null) {
+                for (int i = 0; i < cmbServicio.getItemCount(); i++) {
+                    if (cmbServicio.getItemAt(i).id == idMantenimiento) {
+                        cmbServicio.setSelectedIndex(i);
+                        return;
+                    }
+                }
+            }
             cmbServicio.setSelectedItem(null);
+        }
+
+        private Integer obtenerOCrearIdServicioMantenimiento(Connection conn) throws SQLException {
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT id_tipo_servicio FROM tipo_servicio WHERE nombre = 'Mantenimiento'")) {
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) return rs.getInt("id_tipo_servicio");
+                }
+            }
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO tipo_servicio (nombre, garantia_anual) VALUES ('Mantenimiento', false) " +
+                    "RETURNING id_tipo_servicio")) {
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) return rs.getInt(1);
+                }
+            }
+            return null;
         }
 
         private void actualizarMotor() {

@@ -218,7 +218,7 @@ public class PanelCalendario extends JPanel {
     // ── Lista de citas (tabla derecha) ───────────────────────────────────────
 
     private JPanel buildPanelListaCitas() {
-        modeloTabla = new DefaultTableModel(new String[]{"Fecha /Hora", "Cliente", "Puerta", "Servicio"}, 0) {
+        modeloTabla = new DefaultTableModel(new String[]{"Fecha /Hora", "Cliente", "Puerta", "Dirección", "Servicio"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         tablaCitas = new JTable(modeloTabla);
@@ -239,7 +239,7 @@ public class PanelCalendario extends JPanel {
         modeloTabla.setRowCount(0);
         fechaPorFila.clear();
         for (Object[] fila : citas) {
-            modeloTabla.addRow(new Object[]{fila[0], fila[1], fila[2], fila[3]});
+            modeloTabla.addRow(new Object[]{fila[0], fila[1], fila[2], fila[3], fila[4]});
             fechaPorFila.add(dia);
         }
         DateTimeFormatter fmtTitulo = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", new Locale("es", "MX"));
@@ -252,11 +252,13 @@ public class PanelCalendario extends JPanel {
         List<Object[]> filas = new ArrayList<>();
         List<LocalDate> fechas = new ArrayList<>();
 
-        String sql = "SELECT c.fecha_hora, cl.nombre AS cliente, p.color AS puerta, ts.nombre AS servicio " +
+        String sql = "SELECT c.fecha_hora, cl.nombre AS cliente, tp.nombre AS tipo_puerta, p.color AS color, " +
+                     "d.calle, d.numero, d.colonia, ts.nombre AS servicio " +
                      "FROM cita c " +
                      "JOIN puerta p ON c.id_puerta = p.id_puerta " +
                      "JOIN direccion d ON p.id_direccion = d.id_direccion " +
                      "JOIN cliente cl ON d.id_cliente = cl.id_cliente " +
+                     "LEFT JOIN tipo_puerta tp ON p.id_tipo_puerta = tp.id_tipo_puerta " +
                      "LEFT JOIN servicio_cita sc ON c.id_cita = sc.id_cita " +
                      "LEFT JOIN tipo_servicio ts ON sc.id_tipo_servicio = ts.id_tipo_servicio " +
                      "WHERE c.fecha_hora >= NOW() " +
@@ -268,7 +270,10 @@ public class PanelCalendario extends JPanel {
                 Timestamp ts = rs.getTimestamp("fecha_hora");
                 LocalDateTime fh = ts.toLocalDateTime();
                 String fecha = fh.format(FMT_FECHA_CORTA) + "  " + fh.format(FMT_HORA);
-                filas.add(new Object[]{fecha, rs.getString("cliente"), rs.getString("puerta"),
+                String puertaTexto = (rs.getString("tipo_puerta") != null ? rs.getString("tipo_puerta") : "—")
+                        + ", " + rs.getString("color");
+                String direccionTexto = rs.getString("calle") + " " + rs.getString("numero") + ", " + rs.getString("colonia");
+                filas.add(new Object[]{fecha, rs.getString("cliente"), puertaTexto, direccionTexto,
                         rs.getString("servicio") != null ? rs.getString("servicio") : "—"});
                 fechas.add(fh.toLocalDate());
             }
@@ -308,11 +313,13 @@ public class PanelCalendario extends JPanel {
 
     private List<Object[]> obtenerCitasPorDia(LocalDate dia) {
         List<Object[]> lista = new ArrayList<>();
-        String sql = "SELECT c.fecha_hora, cl.nombre AS cliente, p.color AS puerta, ts.nombre AS servicio " +
+        String sql = "SELECT c.fecha_hora, cl.nombre AS cliente, tp.nombre AS tipo_puerta, p.color AS color, " +
+                     "d.calle, d.numero, d.colonia, ts.nombre AS servicio " +
                      "FROM cita c " +
                      "JOIN puerta p ON c.id_puerta = p.id_puerta " +
                      "JOIN direccion d ON p.id_direccion = d.id_direccion " +
                      "JOIN cliente cl ON d.id_cliente = cl.id_cliente " +
+                     "LEFT JOIN tipo_puerta tp ON p.id_tipo_puerta = tp.id_tipo_puerta " +
                      "LEFT JOIN servicio_cita sc ON c.id_cita = sc.id_cita " +
                      "LEFT JOIN tipo_servicio ts ON sc.id_tipo_servicio = ts.id_tipo_servicio " +
                      "WHERE DATE(c.fecha_hora) = ? " +
@@ -324,7 +331,10 @@ public class PanelCalendario extends JPanel {
             while (rs.next()) {
                 Timestamp ts = rs.getTimestamp("fecha_hora");
                 String hora = ts.toLocalDateTime().format(FMT_HORA);
-                lista.add(new Object[]{hora, rs.getString("cliente"), rs.getString("puerta"),
+                String puertaTexto = (rs.getString("tipo_puerta") != null ? rs.getString("tipo_puerta") : "—")
+                        + ", " + rs.getString("color");
+                String direccionTexto = rs.getString("calle") + " " + rs.getString("numero") + ", " + rs.getString("colonia");
+                lista.add(new Object[]{hora, rs.getString("cliente"), puertaTexto, direccionTexto,
                         rs.getString("servicio") != null ? rs.getString("servicio") : "—"});
             }
         } catch (SQLException e) {

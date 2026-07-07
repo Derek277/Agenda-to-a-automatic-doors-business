@@ -22,6 +22,12 @@ import java.util.List;
  */
 public class PanelCatalogos extends JPanel {
 
+    // Tipos de Puerta
+    private JTable tablaTiposPuerta;
+    private DefaultTableModel modelTiposPuerta;
+    private JButton btnNuevoTipoPuerta, btnEditarTipoPuerta, btnEliminarTipoPuerta;
+    private List<Integer> idsTiposPuerta = new ArrayList<>();
+
     // Motores
     private JTable tablaMotores;
     private DefaultTableModel modelMotores;
@@ -34,15 +40,159 @@ public class PanelCatalogos extends JPanel {
     private JButton btnNuevoServicio, btnEditarServicio, btnEliminarServicio;
     private List<Integer> idsServicios = new ArrayList<>();
 
+    // SQLState estándar de PostgreSQL para violación de llave foránea
+    private static final String SQLSTATE_FOREIGN_KEY_VIOLATION = "23503";
+
     public PanelCatalogos() {
-        setLayout(new GridLayout(1, 2, 15, 15));
+        setLayout(new GridLayout(1, 3, 15, 15));
         setBorder(new EmptyBorder(15, 15, 15, 15));
 
+        add(buildPanelTiposPuerta());
         add(buildPanelMotores());
         add(buildPanelServicios());
 
+        cargarTiposPuerta();
         cargarMotores();
         cargarServicios();
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Panel de Tipos de Puerta (mismo patrón que Tipos de Motor)
+    // ────────────────────────────────────────────────────────────────────────
+    private JPanel buildPanelTiposPuerta() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(new Color(200, 200, 200)), "Tipos de Puerta"));
+        panel.setBackground(Color.WHITE);
+
+        modelTiposPuerta = new DefaultTableModel(new String[]{"Nombre"}, 0) {
+            @Override public boolean isCellEditable(int row, int col) { return false; }
+        };
+        tablaTiposPuerta = new JTable(modelTiposPuerta);
+        tablaTiposPuerta.setRowHeight(30);
+        tablaTiposPuerta.setDefaultRenderer(Object.class, new RendererCatalogo());
+        Estilos.estilizarTabla(tablaTiposPuerta);
+        tablaTiposPuerta.getSelectionModel().addListSelectionListener(e -> actualizarBotonesTipoPuerta());
+
+        JScrollPane scroll = Estilos.scrollParaTabla(tablaTiposPuerta);
+
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+        toolbar.setBackground(Color.WHITE);
+
+        btnNuevoTipoPuerta = new JButton("+ Nuevo");
+        btnEditarTipoPuerta = new JButton("Editar");
+        btnEliminarTipoPuerta = new JButton("Eliminar");
+
+        Estilos.estilizarBoton(btnNuevoTipoPuerta, Estilos.AMARILLO, Color.BLACK);
+        Estilos.estilizarBoton(btnEditarTipoPuerta, Estilos.BOTON_SECUNDARIO, Color.WHITE);
+        Estilos.estilizarBoton(btnEliminarTipoPuerta, Estilos.ROJO_PELIGRO, Color.WHITE);
+
+        btnNuevoTipoPuerta.addActionListener(e -> abrirDialogoTipoPuerta(null));
+        btnEditarTipoPuerta.addActionListener(e -> abrirDialogoTipoPuerta(obtenerIdTipoPuertaSeleccionado()));
+        btnEliminarTipoPuerta.addActionListener(e -> eliminarTipoPuerta());
+
+        toolbar.add(btnNuevoTipoPuerta);
+        toolbar.add(btnEditarTipoPuerta);
+        toolbar.add(btnEliminarTipoPuerta);
+
+        panel.add(scroll, BorderLayout.CENTER);
+        panel.add(toolbar, BorderLayout.SOUTH);
+
+        actualizarBotonesTipoPuerta();
+        return panel;
+    }
+
+    private void cargarTiposPuerta() {
+        modelTiposPuerta.setRowCount(0);
+        idsTiposPuerta.clear();
+        try (Connection conn = Conexion.get();
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(
+                     "SELECT id_tipo_puerta, nombre FROM tipo_puerta ORDER BY nombre")) {
+            while (rs.next()) {
+                modelTiposPuerta.addRow(new Object[]{rs.getString("nombre")});
+                idsTiposPuerta.add(rs.getInt("id_tipo_puerta"));
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+    }
+
+    private Integer obtenerIdTipoPuertaSeleccionado() {
+        int row = tablaTiposPuerta.getSelectedRow();
+        return (row != -1 && row < idsTiposPuerta.size()) ? idsTiposPuerta.get(row) : null;
+    }
+
+    private void actualizarBotonesTipoPuerta() {
+        boolean sel = tablaTiposPuerta.getSelectedRow() != -1;
+        btnEditarTipoPuerta.setEnabled(sel);
+        btnEliminarTipoPuerta.setEnabled(sel);
+    }
+
+    private void abrirDialogoTipoPuerta(Integer idTipoPuerta) {
+        String nombreActual = "";
+        if (idTipoPuerta != null) {
+            int row = idsTiposPuerta.indexOf(idTipoPuerta);
+            if (row >= 0) nombreActual = (String) modelTiposPuerta.getValueAt(row, 0);
+        }
+        DialogoCatalogo dlg = new DialogoCatalogo(SwingUtilities.getWindowAncestor(this),
+                idTipoPuerta == null ? "Nuevo tipo de puerta" : "Editar tipo de puerta",
+                "Nombre del tipo de puerta:", nombreActual, false);
+        dlg.setVisible(true);
+        if (dlg.guardadoExitoso) {
+            guardarTipoPuerta(idTipoPuerta, dlg.texto.trim());
+            cargarTiposPuerta();
+        }
+    }
+
+    private void guardarTipoPuerta(Integer idTipoPuerta, String nombre) {
+        try (Connection conn = Conexion.get()) {
+            if (idTipoPuerta == null) {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO tipo_puerta (nombre) VALUES (?)")) {
+                    ps.setString(1, nombre);
+                    ps.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE tipo_puerta SET nombre=? WHERE id_tipo_puerta=?")) {
+                    ps.setString(1, nombre);
+                    ps.setInt(2, idTipoPuerta);
+                    ps.executeUpdate();
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error al guardar: " + e.getMessage());
+        }
+    }
+
+    private void eliminarTipoPuerta() {
+        Integer id = obtenerIdTipoPuertaSeleccionado();
+        if (id == null) {
+            JOptionPane.showMessageDialog(this, "Seleccione un tipo de puerta.");
+            return;
+        }
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "¿Eliminar este tipo de puerta?",
+                "Confirmar", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (confirm == JOptionPane.YES_OPTION) {
+            try (Connection conn = Conexion.get();
+                 PreparedStatement ps = conn.prepareStatement(
+                         "DELETE FROM tipo_puerta WHERE id_tipo_puerta = ?")) {
+                ps.setInt(1, id);
+                ps.executeUpdate();
+                cargarTiposPuerta();
+            } catch (SQLException e) {
+                if (SQLSTATE_FOREIGN_KEY_VIOLATION.equals(e.getSQLState())) {
+                    JOptionPane.showMessageDialog(this,
+                            "No se puede eliminar: hay puertas que usan este tipo.\n"
+                            + "Reasigna o elimina esas puertas primero.",
+                            "No se puede eliminar", JOptionPane.WARNING_MESSAGE);
+                } else {
+                    e.printStackTrace();
+                    JOptionPane.showMessageDialog(this, "Error al eliminar: " + e.getMessage());
+                }
+            }
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -161,7 +311,7 @@ public class PanelCatalogos extends JPanel {
             return;
         }
         int confirm = JOptionPane.showConfirmDialog(this,
-                "¿Eliminar este tipo de motor?\nLas puertas que lo referencian quedarán sin motor.",
+                "¿Eliminar este tipo de motor?",
                 "Confirmar", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirm == JOptionPane.YES_OPTION) {
             try (Connection conn = Conexion.get();
@@ -171,8 +321,15 @@ public class PanelCatalogos extends JPanel {
                 ps.executeUpdate();
                 cargarMotores();
             } catch (SQLException e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Error al eliminar: " + e.getMessage());
+                if (SQLSTATE_FOREIGN_KEY_VIOLATION.equals(e.getSQLState())) {
+                    JOptionPane.showMessageDialog(this,
+                            "No se puede eliminar: hay puertas que usan este tipo de motor.\n"
+                            + "Reasigna o elimina esas puertas primero.",
+                            "No se puede eliminar", JOptionPane.WARNING_MESSAGE);
+                } else {
+                    e.printStackTrace();
+                    JOptionPane.showMessageDialog(this, "Error al eliminar: " + e.getMessage());
+                }
             }
         }
     }
@@ -303,7 +460,7 @@ public class PanelCatalogos extends JPanel {
             return;
         }
         int confirm = JOptionPane.showConfirmDialog(this,
-                "¿Eliminar este tipo de servicio?\nLas citas que lo referencian se verán afectadas.",
+                "¿Eliminar este tipo de servicio?",
                 "Confirmar", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirm == JOptionPane.YES_OPTION) {
             try (Connection conn = Conexion.get();
@@ -313,8 +470,15 @@ public class PanelCatalogos extends JPanel {
                 ps.executeUpdate();
                 cargarServicios();
             } catch (SQLException e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Error al eliminar: " + e.getMessage());
+                if (SQLSTATE_FOREIGN_KEY_VIOLATION.equals(e.getSQLState())) {
+                    JOptionPane.showMessageDialog(this,
+                            "No se puede eliminar: hay citas que usan este tipo de servicio.\n"
+                            + "Elimina esas citas primero.",
+                            "No se puede eliminar", JOptionPane.WARNING_MESSAGE);
+                } else {
+                    e.printStackTrace();
+                    JOptionPane.showMessageDialog(this, "Error al eliminar: " + e.getMessage());
+                }
             }
         }
     }
