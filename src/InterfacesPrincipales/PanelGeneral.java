@@ -2,12 +2,8 @@ package InterfacesPrincipales;
 
 import Clases.Usuario;
 import InterfacesSecundarias.PanelUsuarios;
-import utilidad.Conexion;
-import com.formdev.flatlaf.FlatDarkLaf;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.sql.SQLException;
 
 public class PanelGeneral extends JFrame {
     private Usuario usuarioActual; // tu clase Usuario con id, nombre, rol (0=admin,1=encargado)
@@ -32,10 +28,29 @@ public class PanelGeneral extends JFrame {
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(Color.BLACK);
         header.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+JPanel panelTitulo = new JPanel(new GridBagLayout());
+panelTitulo.setOpaque(false);
+JLabel lblInnovatec = new JLabel("INNOVATEC");
+lblInnovatec.setFont(new Font("SansSerif", Font.BOLD, 30));
+lblInnovatec.setForeground(utilidad.Estilos.AMARILLO);
+JLabel lblPuertas = new JLabel("<html><u>puertas automáticas</u></html>");
 
-        JLabel lblTitulo = new JLabel("INNOVATEC puertas automáticas");
-        lblTitulo.setFont(new Font("SansSerif", Font.BOLD, 28));
-        lblTitulo.setForeground(utilidad.Estilos.AMARILLO);
+
+lblPuertas.setFont(new Font("SansSerif", Font.BOLD, 25));
+
+
+lblPuertas.setForeground(utilidad.Estilos.AMARILLO);
+GridBagConstraints gbc = new GridBagConstraints();
+gbc.gridx = 0;
+gbc.gridy = 0;
+gbc.anchor = GridBagConstraints.BASELINE;
+gbc.insets = new Insets(0, 0, 0, 8);
+panelTitulo.add(lblInnovatec, gbc);
+gbc.gridx = 1;
+gbc.insets = new Insets(0, 0, 0, 0);
+panelTitulo.add(lblPuertas, gbc);
+
+header.add(panelTitulo, BorderLayout.WEST);
 
         lblRolUsuario = new JLabel();
         lblRolUsuario.setFont(new Font("SansSerif", Font.PLAIN, 14));
@@ -53,7 +68,6 @@ public class PanelGeneral extends JFrame {
         panelDer.add(lblRolUsuario);
         panelDer.add(btnCerrarSesion);
 
-        header.add(lblTitulo, BorderLayout.WEST);
         header.add(panelDer, BorderLayout.EAST);
 
         // TabbedPane
