@@ -924,7 +924,7 @@ public class PanelClientes extends JPanel {
                     "LEFT JOIN servicio_cita sc ON sc.id_cita = c.id_cita " +
                     "LEFT JOIN tipo_servicio ts ON sc.id_tipo_servicio = ts.id_tipo_servicio " +
                     "WHERE pu.id_direccion = ? " +
-                    "ORDER BY (c.fecha_hora < now()) ASC, c.fecha_hora ASC";
+                    "ORDER BY (c.fecha_hora < now()) ASC, c.fecha_hora DESC";
 
             java.text.SimpleDateFormat formato = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
 

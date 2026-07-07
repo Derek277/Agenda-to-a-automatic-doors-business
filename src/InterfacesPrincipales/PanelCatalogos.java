@@ -43,6 +43,20 @@ public class PanelCatalogos extends JPanel {
     // SQLState estándar de PostgreSQL para violación de llave foránea
     private static final String SQLSTATE_FOREIGN_KEY_VIOLATION = "23503";
 
+    /**
+     * Detecta si un SQLException corresponde a una violación de llave foránea
+     * (incluye el caso de restricciones ON DELETE RESTRICT). Se revisa primero
+     * el SQLState estándar y, como respaldo, el texto del mensaje, por si el
+     * SQLState no llegara a propagarse correctamente.
+     */
+    private static boolean esViolacionLlaveForanea(SQLException e) {
+        if (SQLSTATE_FOREIGN_KEY_VIOLATION.equals(e.getSQLState())) return true;
+        String msg = e.getMessage();
+        if (msg == null) return false;
+        String m = msg.toLowerCase();
+        return m.contains("foreign key") && (m.contains("violat") || m.contains("restrict"));
+    }
+
     public PanelCatalogos() {
         setLayout(new GridLayout(1, 3, 15, 15));
         setBorder(new EmptyBorder(15, 15, 15, 15));
@@ -182,7 +196,7 @@ public class PanelCatalogos extends JPanel {
                 ps.executeUpdate();
                 cargarTiposPuerta();
             } catch (SQLException e) {
-                if (SQLSTATE_FOREIGN_KEY_VIOLATION.equals(e.getSQLState())) {
+                if (esViolacionLlaveForanea(e)) {
                     JOptionPane.showMessageDialog(this,
                             "No se puede eliminar: hay puertas que usan este tipo.\n"
                             + "Reasigna o elimina esas puertas primero.",
@@ -321,7 +335,7 @@ public class PanelCatalogos extends JPanel {
                 ps.executeUpdate();
                 cargarMotores();
             } catch (SQLException e) {
-                if (SQLSTATE_FOREIGN_KEY_VIOLATION.equals(e.getSQLState())) {
+                if (esViolacionLlaveForanea(e)) {
                     JOptionPane.showMessageDialog(this,
                             "No se puede eliminar: hay puertas que usan este tipo de motor.\n"
                             + "Reasigna o elimina esas puertas primero.",
@@ -470,7 +484,7 @@ public class PanelCatalogos extends JPanel {
                 ps.executeUpdate();
                 cargarServicios();
             } catch (SQLException e) {
-                if (SQLSTATE_FOREIGN_KEY_VIOLATION.equals(e.getSQLState())) {
+                if (esViolacionLlaveForanea(e)) {
                     JOptionPane.showMessageDialog(this,
                             "No se puede eliminar: hay citas que usan este tipo de servicio.\n"
                             + "Elimina esas citas primero.",

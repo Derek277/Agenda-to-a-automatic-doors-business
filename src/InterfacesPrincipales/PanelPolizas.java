@@ -697,7 +697,8 @@ public class PanelPolizas extends JPanel {
         private JTextField txtFecha, txtHora;
         private JComboBox<ClienteItem> cmbCliente;
         private JComboBox<PuertaItem> cmbPuerta;
-        private JComboBox<ServicioItem> cmbServicio;
+        private JLabel lblServicio;
+        private Integer idServicioMantenimiento;
         private JComboBox<String> cmbTipoPoliza;
         private JLabel lblMotor, lblPreview;
         private JButton btnGuardar, btnCancelar;
@@ -720,17 +721,12 @@ public class PanelPolizas extends JPanel {
             }
             @Override public String toString() { return texto; }
         }
-        private static class ServicioItem {
-            int id; String texto;
-            ServicioItem(int id, String texto) { this.id = id; this.texto = texto; }
-            @Override public String toString() { return texto; }
-        }
 
         public DialogoNuevaPoliza(JPanel owner) {
             super(SwingUtilities.getWindowAncestor(owner), "Nueva póliza", ModalityType.APPLICATION_MODAL);
             initUI();
             cargarClientes();
-            cargarServicios();
+            asegurarServicioMantenimiento();
             cargarTodasLasPuertas();
             actualizarFecha();
             setSize(820, 650);
@@ -807,11 +803,12 @@ public class PanelPolizas extends JPanel {
             gbc.gridwidth = 1;
 
             gbc.gridx = 0; gbc.gridy = ++y;
-            panelForm.add(new JLabel("Servicio: *"), gbc);
-            cmbServicio = new JComboBox<>();
-            estilizarCombo(cmbServicio);
+            panelForm.add(new JLabel("Servicio:"), gbc);
+            lblServicio = new JLabel("Mantenimiento");
+            lblServicio.setFont(new Font("SansSerif", Font.BOLD, 13));
+            lblServicio.setForeground(Color.DARK_GRAY);
             gbc.gridx = 1; gbc.gridwidth = 2;
-            panelForm.add(cmbServicio, gbc);
+            panelForm.add(lblServicio, gbc);
             gbc.gridwidth = 1;
 
             gbc.gridx = 0; gbc.gridy = ++y;
@@ -1027,31 +1024,19 @@ public class PanelPolizas extends JPanel {
             actualizarMotor();
         }
 
-        private void cargarServicios() {
-            cmbServicio.removeAllItems();
-            Integer idMantenimiento = null;
+        private void asegurarServicioMantenimiento() {
             try (Connection conn = Conexion.get()) {
-                // Aseguramos que exista un servicio "Mantenimiento": lo buscamos y,
-                // si no existe todavía en esta base de datos, lo creamos al vuelo.
-                idMantenimiento = obtenerOCrearIdServicioMantenimiento(conn);
-                try (Statement st = conn.createStatement();
-                     ResultSet rs = st.executeQuery("SELECT id_tipo_servicio, nombre FROM tipo_servicio ORDER BY nombre")) {
-                    while (rs.next()) {
-                        cmbServicio.addItem(new ServicioItem(rs.getInt("id_tipo_servicio"), rs.getString("nombre")));
-                    }
-                }
+                // Una póliza siempre corresponde al servicio "Mantenimiento": lo
+                // buscamos y, si no existe todavía en esta base de datos, lo creamos.
+                idServicioMantenimiento = obtenerOCrearIdServicioMantenimiento(conn);
             } catch (SQLException e) { e.printStackTrace(); }
 
-            // Servicio "Mantenimiento" seleccionado por defecto
-            if (idMantenimiento != null) {
-                for (int i = 0; i < cmbServicio.getItemCount(); i++) {
-                    if (cmbServicio.getItemAt(i).id == idMantenimiento) {
-                        cmbServicio.setSelectedIndex(i);
-                        return;
-                    }
-                }
+            if (idServicioMantenimiento != null) {
+                lblServicio.setText("Mantenimiento");
+            } else {
+                lblServicio.setText("Mantenimiento (no se pudo verificar en la base de datos)");
+                lblServicio.setForeground(Estilos.ROJO_PELIGRO);
             }
-            cmbServicio.setSelectedItem(null);
         }
 
         private Integer obtenerOCrearIdServicioMantenimiento(Connection conn) throws SQLException {
@@ -1109,9 +1094,8 @@ public class PanelPolizas extends JPanel {
         private void guardarPoliza() {
             ClienteItem cliente = (ClienteItem) cmbCliente.getSelectedItem();
             PuertaItem puerta = (PuertaItem) cmbPuerta.getSelectedItem();
-            ServicioItem servicio = (ServicioItem) cmbServicio.getSelectedItem();
 
-            if (cliente == null || puerta == null || servicio == null || txtHora.getText().trim().isEmpty()) {
+            if (cliente == null || puerta == null || idServicioMantenimiento == null || txtHora.getText().trim().isEmpty()) {
                 JOptionPane.showMessageDialog(this, "Complete todos los campos obligatorios (*).");
                 return;
             }
@@ -1148,7 +1132,7 @@ public class PanelPolizas extends JPanel {
 
                         String sqlServ = "INSERT INTO servicio_cita (id_tipo_servicio, id_cita) VALUES (?, ?)";
                         try (PreparedStatement ps = conn.prepareStatement(sqlServ)) {
-                            ps.setInt(1, servicio.id);
+                            ps.setInt(1, idServicioMantenimiento);
                             ps.setInt(2, idCita);
                             ps.executeUpdate();
                         }

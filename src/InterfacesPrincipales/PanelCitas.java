@@ -876,10 +876,11 @@ switch (orden) {
         private void cargarTodasLasPuertas() {
             cmbPuerta.removeAllItems();
             String sql = "SELECT p.id_puerta, p.id_direccion, p.color, p.id_tipo_motor, tm.nombre AS motor_nombre, " +
-                         "d.calle, d.numero " +
+                         "tp.nombre AS tipo_puerta_nombre, d.calle, d.numero " +
                          "FROM puerta p " +
                          "JOIN direccion d ON p.id_direccion = d.id_direccion " +
                          "LEFT JOIN tipo_motor tm ON p.id_tipo_motor = tm.id_tipo_motor " +
+                         "LEFT JOIN tipo_puerta tp ON p.id_tipo_puerta = tp.id_tipo_puerta " +
                          "ORDER BY p.id_puerta";
             try (Connection conn = Conexion.get();
                  Statement st = conn.createStatement();
@@ -887,7 +888,8 @@ switch (orden) {
                 while (rs.next()) {
                     Integer idMotor = rs.getObject("id_tipo_motor") != null ? rs.getInt("id_tipo_motor") : null;
                     String motor = rs.getString("motor_nombre");
-                    String texto = (motor != null ? motor + ", " : "") + rs.getString("color") +
+                    String tipoPuerta = rs.getString("tipo_puerta_nombre");
+                    String texto = (tipoPuerta != null ? tipoPuerta + ", " : "") + rs.getString("color") +
                             " (" + rs.getString("calle") + " " + rs.getString("numero") + ")";
                     cmbPuerta.addItem(new PuertaItem(rs.getInt("id_puerta"), rs.getInt("id_direccion"),
                             idMotor, motor, texto));
@@ -902,10 +904,11 @@ switch (orden) {
             ClienteItem cliente = (ClienteItem) cmbCliente.getSelectedItem();
             if (cliente == null) { cargarTodasLasPuertas(); return; }
             String sql = "SELECT p.id_puerta, p.id_direccion, p.color, p.id_tipo_motor, tm.nombre AS motor_nombre, " +
-                         "d.calle, d.numero " +
+                         "tp.nombre AS tipo_puerta_nombre, d.calle, d.numero " +
                          "FROM puerta p " +
                          "JOIN direccion d ON p.id_direccion = d.id_direccion " +
                          "LEFT JOIN tipo_motor tm ON p.id_tipo_motor = tm.id_tipo_motor " +
+                         "LEFT JOIN tipo_puerta tp ON p.id_tipo_puerta = tp.id_tipo_puerta " +
                          "WHERE d.id_cliente = ? " +
                          "ORDER BY p.id_puerta";
             try (Connection conn = Conexion.get();
@@ -917,7 +920,8 @@ switch (orden) {
                     hayPuertas = true;
                     Integer idMotor = rs.getObject("id_tipo_motor") != null ? rs.getInt("id_tipo_motor") : null;
                     String motor = rs.getString("motor_nombre");
-                    String texto = (motor != null ? motor + ", " : "") + rs.getString("color") +
+                    String tipoPuerta = rs.getString("tipo_puerta_nombre");
+                    String texto = (tipoPuerta != null ? tipoPuerta + ", " : "") + rs.getString("color") +
                             " (" + rs.getString("calle") + " " + rs.getString("numero") + ")";
                     cmbPuerta.addItem(new PuertaItem(rs.getInt("id_puerta"), rs.getInt("id_direccion"),
                             idMotor, motor, texto));
